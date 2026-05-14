@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     max_batch_size: int = 8
     max_wait_ms: int = 200
+    max_input_characters: int = 2000
+    max_batch_items: int = 32
     translation_timeout_seconds: int = 30
     max_retries: int = 3
 
