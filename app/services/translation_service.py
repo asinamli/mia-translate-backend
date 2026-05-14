@@ -1,3 +1,6 @@
+# Burada async mode gelirse artık çeviri yapmayacağız. Job oluşturup queued döneceğiz.
+
+
 from app.clients.base import TranslationClient, TranslationInput
 from app.clients.mock_client import MockTranslationClient
 from app.core.exceptions import UnsupportedTranslationModeError
@@ -10,6 +13,7 @@ from app.schemas.translation import (
     TranslationResponse,
     TranslationStatus,
 )
+from app.services.job_service import JobService
 from app.services.language_service import get_language_tag
 from app.services.validation_service import (
     validate_batch_translation_request,
@@ -19,13 +23,34 @@ from app.utils.id_generator import generate_request_id
 
 
 class TranslationService:
-    def __init__(self, translation_client: TranslationClient | None = None):
+    def __init__(
+        self,
+        translation_client: TranslationClient | None = None,
+        job_service: JobService | None = None,
+    ):
         self.translation_client = translation_client or MockTranslationClient()
+        self.job_service = job_service or JobService()
 
     def translate(self, request: TranslationRequest) -> TranslationResponse:
         validate_translation_request(request)
 
         request_id = generate_request_id()
+
+        if request.mode == TranslationMode.async_:
+            job = self.job_service.create_translation_job(
+                source_lang=request.source_lang,
+                target_lang=request.target_lang,
+            )
+
+            return TranslationResponse(
+                request_id=request_id,
+                mode=request.mode,
+                status=TranslationStatus.queued,
+                source_lang=request.source_lang,
+                target_lang=request.target_lang,
+                job_id=job.job_id,
+            )
+
         target_tag = get_language_tag(request.target_lang)
 
         translation_input = TranslationInput(
