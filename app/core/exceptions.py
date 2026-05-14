@@ -27,3 +27,11 @@ class BatchSizeExceededError(AppException):
             code="BATCH_SIZE_EXCEEDED",
             message=f"Batch item count cannot exceed {max_items}.",
         )
+
+
+class UnsupportedTranslationModeError(AppException):
+    def __init__(self, mode: str):
+        super().__init__(
+            code="UNSUPPORTED_TRANSLATION_MODE",
+            message=f"Translation mode is not supported in this flow yet: {mode}",
+        )

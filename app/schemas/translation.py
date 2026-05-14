@@ -64,8 +64,19 @@ class BatchTranslationRequest(BaseModel):
     mode: TranslationMode = TranslationMode.async_
 
 
+class BatchTranslationItemResponse(BaseModel):
+    item_index: int
+    status: TranslationStatus
+    source_lang: Optional[str] = None
+    target_lang: str
+    translated_text: Optional[str] = None
+    job_id: Optional[str] = None
+    error: Optional[str] = None
+
+
 class BatchTranslationResponse(BaseModel):
     request_id: str
     mode: TranslationMode
     status: TranslationStatus
+    items: list[BatchTranslationItemResponse] = Field(default_factory=list)
     job_ids: list[str] = Field(default_factory=list)
