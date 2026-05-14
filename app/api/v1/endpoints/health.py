@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.core.config import get_settings
+from app.queue.redis_client import check_redis_connection
 
 router = APIRouter(tags=["Health"])
 
@@ -19,13 +20,16 @@ def health_check():
 def readiness_check():
     settings = get_settings()
 
+    redis_connected = check_redis_connection()
+
     return {
-        "status": "ready",
+        "status": "ready" if redis_connected else "not_ready",
         "service": settings.app_name,
         "environment": settings.app_env,
         "checks": {
             "config": "ok",
             "translation_client": settings.translation_client,
+            "redis": "ok" if redis_connected else "failed",
             "redis_url_configured": bool(settings.redis_url),
             "vertex_configured": bool(
                 settings.vertex_project_id
