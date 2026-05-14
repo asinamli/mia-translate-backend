@@ -38,9 +38,10 @@ class TranslationService:
 
         if request.mode == TranslationMode.async_:
             job = self.job_service.create_translation_job(
+                text=request.text,
                 source_lang=request.source_lang,
                 target_lang=request.target_lang,
-            )
+)
 
             return TranslationResponse(
                 request_id=request_id,
