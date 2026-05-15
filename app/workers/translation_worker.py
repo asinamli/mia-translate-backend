@@ -4,8 +4,11 @@ Bu dosyanın görevi:
 Redis queue’dan job almak, çeviri yapmak ve job durumunu Redis’te güncellemek.
 """
 
+# Bu dosyanın görevi artık sadece tek job işlemek değil, batch job işlemek olacak
+
 import argparse
 import time
+from collections import defaultdict
 
 from app.clients.base import TranslationClient, TranslationInput
 from app.clients.mock_client import MockTranslationClient
@@ -14,6 +17,7 @@ from app.queue.job_store import RedisJobStore
 from app.queue.translation_queue import RedisTranslationQueue
 from app.schemas.translation import TranslationStatus
 from app.services.language_service import get_language_tag
+from app.workers.batcher import JobBatcher
 
 
 class TranslationWorker:
@@ -22,10 +26,18 @@ class TranslationWorker:
         job_store: RedisJobStore | None = None,
         translation_queue: RedisTranslationQueue | None = None,
         translation_client: TranslationClient | None = None,
+        max_batch_size: int | None = None,
+        max_wait_ms: int | None = None,
     ):
         self.job_store = job_store or RedisJobStore()
         self.translation_queue = translation_queue or RedisTranslationQueue()
         self.translation_client = translation_client or MockTranslationClient()
+
+        self.batcher = JobBatcher(
+            translation_queue=self.translation_queue,
+            max_batch_size=max_batch_size,
+            max_wait_ms=max_wait_ms,
+        )
 
     def process_next_job(self) -> bool:
         job_id = self.translation_queue.dequeue()
@@ -33,59 +45,88 @@ class TranslationWorker:
         if job_id is None:
             return False
 
-        job = self.job_store.get_job(job_id)
+        processed_count = self._process_job_ids([job_id])
+        return processed_count > 0
 
-        if job is None:
-            return False
+# yeni metot bu batch job işliyor
+    def process_next_batch(self) -> int:
+        job_ids = self.batcher.collect_job_ids()
+        return self._process_job_ids(job_ids)
 
-        self.job_store.update_job(
-            job_id=job.job_id,
-            status=TranslationStatus.processing,
-        )
+    def _process_job_ids(self, job_ids: list[str]) -> int:
+        jobs = []
 
-        try:
-            target_tag = get_language_tag(job.target_lang)
+        for job_id in job_ids:
+            job = self.job_store.get_job(job_id)
 
-            translation_input = TranslationInput(
-                text=job.text,
-                source_lang=job.source_lang,
-                target_lang=job.target_lang,
-                target_tag=target_tag,
-            )
-
-            translation_output = self.translation_client.translate(translation_input)
+            if job is None:
+                continue
 
             self.job_store.update_job(
                 job_id=job.job_id,
-                status=TranslationStatus.completed,
-                translated_text=translation_output.translated_text,
+                status=TranslationStatus.processing,
             )
 
-            return True
+            jobs.append(job)
 
-        except AppException as exc:
-            self.job_store.update_job(
-                job_id=job.job_id,
-                status=TranslationStatus.failed,
-                error=exc.message,
-            )
+        if not jobs:
+            return 0
 
-            return False
+        jobs_by_target_lang = defaultdict(list)
 
-        except Exception as exc:
-            self.job_store.update_job(
-                job_id=job.job_id,
-                status=TranslationStatus.failed,
-                error=str(exc),
-            )
+        for job in jobs:
+            jobs_by_target_lang[job.target_lang].append(job)
 
-            return False
+        processed_count = 0
+
+        for target_lang, grouped_jobs in jobs_by_target_lang.items():
+            try:
+                translation_inputs = [
+                    TranslationInput(
+                        text=job.text,
+                        source_lang=job.source_lang,
+                        target_lang=job.target_lang,
+                        target_tag=get_language_tag(target_lang),
+                    )
+                    for job in grouped_jobs
+                ]
+
+                translation_outputs = self.translation_client.translate_batch(
+                    translation_inputs
+                )
+
+                for job, translation_output in zip(grouped_jobs, translation_outputs):
+                    self.job_store.update_job(
+                        job_id=job.job_id,
+                        status=TranslationStatus.completed,
+                        translated_text=translation_output.translated_text,
+                    )
+
+                    processed_count += 1
+
+            except AppException as exc:
+                for job in grouped_jobs:
+                    self.job_store.update_job(
+                        job_id=job.job_id,
+                        status=TranslationStatus.failed,
+                        error=exc.message,
+                    )
+
+            except Exception as exc:
+                for job in grouped_jobs:
+                    self.job_store.update_job(
+                        job_id=job.job_id,
+                        status=TranslationStatus.failed,
+                        error=str(exc),
+                    )
+
+        return processed_count
 
     def run_forever(self, poll_interval_seconds: float = 1.0) -> None:
         while True:
-            processed = self.process_next_job()
+            processed_count = self.process_next_batch()
 
-            if not processed:
+            if processed_count == 0:
                 time.sleep(poll_interval_seconds)
 
 
@@ -94,7 +135,7 @@ def main() -> None:
     parser.add_argument(
         "--once",
         action="store_true",
-        help="Process only one queued job and exit.",
+        help="Process one batch of queued jobs and exit.",
     )
 
     args = parser.parse_args()
@@ -102,8 +143,8 @@ def main() -> None:
     worker = TranslationWorker()
 
     if args.once:
-        processed = worker.process_next_job()
-        print({"processed": processed})
+        processed_count = worker.process_next_batch()
+        print({"processed": processed_count})
         return
 
     worker.run_forever()

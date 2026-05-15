@@ -67,3 +67,109 @@ def test_worker_returns_false_when_job_does_not_exist():
     processed = worker.process_next_job()
 
     assert processed is False
+
+def test_worker_processes_multiple_jobs_in_one_batch():
+    job_store = InMemoryJobStore()
+    translation_queue = InMemoryTranslationQueue()
+
+    jobs = [
+        TranslationJob(
+            job_id="job_batch_1",
+            text="Merhaba",
+            source_lang="tr",
+            target_lang="en",
+        ),
+        TranslationJob(
+            job_id="job_batch_2",
+            text="Nasılsın?",
+            source_lang="tr",
+            target_lang="en",
+        ),
+        TranslationJob(
+            job_id="job_batch_3",
+            text="Teşekkürler",
+            source_lang="tr",
+            target_lang="en",
+        ),
+    ]
+
+    for job in jobs:
+        job_store.create_job(job)
+        translation_queue.enqueue(job.job_id)
+
+    worker = TranslationWorker(
+        job_store=job_store,
+        translation_queue=translation_queue,
+        translation_client=MockTranslationClient(),
+        max_batch_size=3,
+        max_wait_ms=0,
+    )
+
+    processed_count = worker.process_next_batch()
+
+    assert processed_count == 3
+    assert translation_queue.length() == 0
+
+    first_job = job_store.get_job("job_batch_1")
+    second_job = job_store.get_job("job_batch_2")
+    third_job = job_store.get_job("job_batch_3")
+
+    assert first_job.status == TranslationStatus.completed
+    assert first_job.translated_text == "[mock-<2en>] Merhaba"
+
+    assert second_job.status == TranslationStatus.completed
+    assert second_job.translated_text == "[mock-<2en>] Nasılsın?"
+
+    assert third_job.status == TranslationStatus.completed
+    assert third_job.translated_text == "[mock-<2en>] Teşekkürler"
+
+
+def test_worker_respects_max_batch_size():
+    job_store = InMemoryJobStore()
+    translation_queue = InMemoryTranslationQueue()
+
+    jobs = [
+        TranslationJob(
+            job_id="job_limit_1",
+            text="Birinci",
+            source_lang="tr",
+            target_lang="en",
+        ),
+        TranslationJob(
+            job_id="job_limit_2",
+            text="İkinci",
+            source_lang="tr",
+            target_lang="en",
+        ),
+        TranslationJob(
+            job_id="job_limit_3",
+            text="Üçüncü",
+            source_lang="tr",
+            target_lang="en",
+        ),
+    ]
+
+    for job in jobs:
+        job_store.create_job(job)
+        translation_queue.enqueue(job.job_id)
+
+    worker = TranslationWorker(
+        job_store=job_store,
+        translation_queue=translation_queue,
+        translation_client=MockTranslationClient(),
+        max_batch_size=2,
+        max_wait_ms=0,
+    )
+
+    processed_count = worker.process_next_batch()
+
+    assert processed_count == 2
+    assert translation_queue.length() == 1
+
+    first_job = job_store.get_job("job_limit_1")
+    second_job = job_store.get_job("job_limit_2")
+    third_job = job_store.get_job("job_limit_3")
+
+    assert first_job.status == TranslationStatus.completed
+    assert second_job.status == TranslationStatus.completed
+    assert third_job.status == TranslationStatus.queued
