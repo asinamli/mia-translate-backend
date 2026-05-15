@@ -1,18 +1,12 @@
-"""
-Bu dosyanın görevi:
-
-Redis queue’dan job almak, çeviri yapmak ve job durumunu Redis’te güncellemek.
-"""
-
-# Bu dosyanın görevi artık sadece tek job işlemek değil, batch job işlemek olacak
-
 import argparse
 import time
 from collections import defaultdict
 
 from app.clients.base import TranslationClient, TranslationInput
 from app.clients.mock_client import MockTranslationClient
+from app.core.config import get_settings
 from app.core.exceptions import AppException
+from app.models.translation_job import TranslationJob
 from app.queue.job_store import RedisJobStore
 from app.queue.translation_queue import RedisTranslationQueue
 from app.schemas.translation import TranslationStatus
@@ -28,10 +22,14 @@ class TranslationWorker:
         translation_client: TranslationClient | None = None,
         max_batch_size: int | None = None,
         max_wait_ms: int | None = None,
+        max_retries: int | None = None,
     ):
+        settings = get_settings()
+
         self.job_store = job_store or RedisJobStore()
         self.translation_queue = translation_queue or RedisTranslationQueue()
         self.translation_client = translation_client or MockTranslationClient()
+        self.max_retries = settings.max_retries if max_retries is None else max_retries
 
         self.batcher = JobBatcher(
             translation_queue=self.translation_queue,
@@ -48,7 +46,6 @@ class TranslationWorker:
         processed_count = self._process_job_ids([job_id])
         return processed_count > 0
 
-# yeni metot bu batch job işliyor
     def process_next_batch(self) -> int:
         job_ids = self.batcher.collect_job_ids()
         return self._process_job_ids(job_ids)
@@ -100,27 +97,41 @@ class TranslationWorker:
                         job_id=job.job_id,
                         status=TranslationStatus.completed,
                         translated_text=translation_output.translated_text,
+                        error=None,
                     )
 
                     processed_count += 1
 
             except AppException as exc:
                 for job in grouped_jobs:
-                    self.job_store.update_job(
-                        job_id=job.job_id,
-                        status=TranslationStatus.failed,
-                        error=exc.message,
-                    )
+                    self._handle_job_failure(job, exc.message)
 
             except Exception as exc:
                 for job in grouped_jobs:
-                    self.job_store.update_job(
-                        job_id=job.job_id,
-                        status=TranslationStatus.failed,
-                        error=str(exc),
-                    )
+                    self._handle_job_failure(job, str(exc))
 
         return processed_count
+
+    def _handle_job_failure(self, job: TranslationJob, error_message: str) -> None:
+        next_retry_count = job.retry_count + 1
+
+        if job.retry_count < self.max_retries:
+            self.job_store.update_job(
+                job_id=job.job_id,
+                status=TranslationStatus.queued,
+                error=error_message,
+                retry_count=next_retry_count,
+            )
+
+            self.translation_queue.enqueue(job.job_id)
+            return
+
+        self.job_store.update_job(
+            job_id=job.job_id,
+            status=TranslationStatus.failed,
+            error=error_message,
+            retry_count=job.retry_count,
+        )
 
     def run_forever(self, poll_interval_seconds: float = 1.0) -> None:
         while True:

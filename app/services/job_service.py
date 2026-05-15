@@ -57,4 +57,5 @@ class JobService:
             target_lang=job.target_lang,
             translated_text=job.translated_text,
             error=job.error,
+            retry_count=job.retry_count,
         )

@@ -4,6 +4,7 @@ from app.queue.job_store import InMemoryJobStore
 from app.queue.translation_queue import InMemoryTranslationQueue
 from app.schemas.translation import TranslationStatus
 from app.workers.translation_worker import TranslationWorker
+from app.clients.base import TranslationClient, TranslationInput, TranslationOutput
 
 
 def test_worker_processes_queued_job_successfully():
@@ -173,3 +174,85 @@ def test_worker_respects_max_batch_size():
     assert first_job.status == TranslationStatus.completed
     assert second_job.status == TranslationStatus.completed
     assert third_job.status == TranslationStatus.queued
+
+class FailingTranslationClient(TranslationClient):
+    def translate(self, translation_input: TranslationInput) -> TranslationOutput:
+        raise RuntimeError("model unavailable")
+
+    def translate_batch(
+        self,
+        translation_inputs: list[TranslationInput],
+    ) -> list[TranslationOutput]:
+        raise RuntimeError("model unavailable")
+
+
+def test_worker_requeues_failed_job_when_retry_limit_is_not_exceeded():
+    job_store = InMemoryJobStore()
+    translation_queue = InMemoryTranslationQueue()
+
+    job = TranslationJob(
+        job_id="job_retry_1",
+        text="Merhaba",
+        source_lang="tr",
+        target_lang="en",
+        retry_count=0,
+    )
+
+    job_store.create_job(job)
+    translation_queue.enqueue(job.job_id)
+
+    worker = TranslationWorker(
+        job_store=job_store,
+        translation_queue=translation_queue,
+        translation_client=FailingTranslationClient(),
+        max_batch_size=1,
+        max_wait_ms=0,
+        max_retries=2,
+    )
+
+    processed_count = worker.process_next_batch()
+
+    updated_job = job_store.get_job(job.job_id)
+
+    assert processed_count == 0
+    assert updated_job is not None
+    assert updated_job.status == TranslationStatus.queued
+    assert updated_job.retry_count == 1
+    assert updated_job.error == "model unavailable"
+    assert translation_queue.length() == 1
+
+
+def test_worker_marks_job_failed_when_retry_limit_is_reached():
+    job_store = InMemoryJobStore()
+    translation_queue = InMemoryTranslationQueue()
+
+    job = TranslationJob(
+        job_id="job_retry_2",
+        text="Merhaba",
+        source_lang="tr",
+        target_lang="en",
+        retry_count=2,
+    )
+
+    job_store.create_job(job)
+    translation_queue.enqueue(job.job_id)
+
+    worker = TranslationWorker(
+        job_store=job_store,
+        translation_queue=translation_queue,
+        translation_client=FailingTranslationClient(),
+        max_batch_size=1,
+        max_wait_ms=0,
+        max_retries=2,
+    )
+
+    processed_count = worker.process_next_batch()
+
+    updated_job = job_store.get_job(job.job_id)
+
+    assert processed_count == 0
+    assert updated_job is not None
+    assert updated_job.status == TranslationStatus.failed
+    assert updated_job.retry_count == 2
+    assert updated_job.error == "model unavailable"
+    assert translation_queue.length() == 0

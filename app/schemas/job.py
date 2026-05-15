@@ -1,9 +1,3 @@
-"""
-Bu dosyanın görevi:
-
-Async job durumunu API response olarak tanımlamak.
-"""
-
 from typing import Optional
 
 from pydantic import BaseModel
@@ -18,3 +12,4 @@ class JobStatusResponse(BaseModel):
     target_lang: Optional[str] = None
     translated_text: Optional[str] = None
     error: Optional[str] = None
+    retry_count: int = 0

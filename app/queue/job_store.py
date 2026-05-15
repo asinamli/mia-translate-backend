@@ -1,8 +1,3 @@
-"""
-Bu dosyanın görevi:
-
-Job kayıtlarını saklamak. Artık ana yapı Redis olacak. Testlerde kullanmak için InMemory yapı da kalacak.
-"""
 from app.models.translation_job import TranslationJob
 from app.queue.redis_client import get_redis_client
 from app.schemas.translation import TranslationStatus
@@ -25,19 +20,23 @@ class InMemoryJobStore:
         status: TranslationStatus,
         translated_text: str | None = None,
         error: str | None = None,
+        retry_count: int | None = None,
     ) -> TranslationJob | None:
         job = self._jobs.get(job_id)
 
         if job is None:
             return None
 
-        updated_job = job.model_copy(
-            update={
-                "status": status,
-                "translated_text": translated_text,
-                "error": error,
-            }
-        )
+        update_data = {
+            "status": status,
+            "translated_text": translated_text,
+            "error": error,
+        }
+
+        if retry_count is not None:
+            update_data["retry_count"] = retry_count
+
+        updated_job = job.model_copy(update=update_data)
 
         self._jobs[job_id] = updated_job
         return updated_job
@@ -77,19 +76,23 @@ class RedisJobStore:
         status: TranslationStatus,
         translated_text: str | None = None,
         error: str | None = None,
+        retry_count: int | None = None,
     ) -> TranslationJob | None:
         job = self.get_job(job_id)
 
         if job is None:
             return None
 
-        updated_job = job.model_copy(
-            update={
-                "status": status,
-                "translated_text": translated_text,
-                "error": error,
-            }
-        )
+        update_data = {
+            "status": status,
+            "translated_text": translated_text,
+            "error": error,
+        }
+
+        if retry_count is not None:
+            update_data["retry_count"] = retry_count
+
+        updated_job = job.model_copy(update=update_data)
 
         redis_client = get_redis_client()
 
@@ -103,4 +106,3 @@ class RedisJobStore:
 
 
 job_store = RedisJobStore()
-#Şu an uygulama gerçek çalışırken RedisJobStore kullanacak. Testlerde ise bunu monkeypatch ile InMemoryJobStore yapacağız
