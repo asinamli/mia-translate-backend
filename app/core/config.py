@@ -26,11 +26,21 @@ class Settings(BaseSettings):
     vertex_location: str = ""
     vertex_endpoint_id: str = ""
 
+    triton_url: str = "http://localhost:8001"
+    triton_model_name: str = "mia_translate"
+    triton_timeout_seconds: int = 30
+
+    ctranslate2_model_path: str = "./models/mia-translate-ct2"
+    ctranslate2_device: str = "cpu"
+    ctranslate2_compute_type: str = "int8"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+
+    
     )
 
 

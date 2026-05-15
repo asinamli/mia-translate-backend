@@ -2,7 +2,7 @@
 
 
 from app.clients.base import TranslationClient, TranslationInput
-from app.clients.mock_client import MockTranslationClient
+from app.clients.factory import create_translation_client
 from app.core.exceptions import UnsupportedTranslationModeError
 from app.schemas.translation import (
     BatchTranslationItemResponse,
@@ -28,7 +28,7 @@ class TranslationService:
         translation_client: TranslationClient | None = None,
         job_service: JobService | None = None,
     ):
-        self.translation_client = translation_client or MockTranslationClient()
+        self.translation_client = translation_client or create_translation_client()
         self.job_service = job_service or JobService()
 
     def translate(self, request: TranslationRequest) -> TranslationResponse:

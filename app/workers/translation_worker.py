@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 
 from app.clients.base import TranslationClient, TranslationInput
-from app.clients.mock_client import MockTranslationClient
+from app.clients.factory import create_translation_client
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models.translation_job import TranslationJob
@@ -28,7 +28,7 @@ class TranslationWorker:
 
         self.job_store = job_store or RedisJobStore()
         self.translation_queue = translation_queue or RedisTranslationQueue()
-        self.translation_client = translation_client or MockTranslationClient()
+        self.translation_client = translation_client or create_translation_client()
         self.max_retries = settings.max_retries if max_retries is None else max_retries
 
         self.batcher = JobBatcher(

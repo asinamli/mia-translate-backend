@@ -35,3 +35,18 @@ class UnsupportedTranslationModeError(AppException):
             code="UNSUPPORTED_TRANSLATION_MODE",
             message=f"Translation mode is not supported in this flow yet: {mode}",
         )
+
+class TranslationClientConfigurationError(AppException):
+    def __init__(self, message: str):
+        super().__init__(
+            code="TRANSLATION_CLIENT_CONFIGURATION_ERROR",
+            message=message,
+        )
+
+
+class TranslationClientRuntimeError(AppException):
+    def __init__(self, message: str):
+        super().__init__(
+            code="TRANSLATION_CLIENT_RUNTIME_ERROR",
+            message=message,
+        )
