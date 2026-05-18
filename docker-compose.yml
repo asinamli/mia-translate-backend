@@ -1,12 +1,83 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: mia-translate-redis
+    container_name: mia-translate-redis # container adı
     ports:
-      - "6380:6379"
+      - "6380:6379"  # bilgisrımdaki 6380 portu container içindeki 6379 portna bağlanır
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: mia-translate-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: mia-translate-backend
+      APP_ENV: docker
+      API_PREFIX: /api/v1
+      TRANSLATION_CLIENT: mock
+      REDIS_URL: redis://redis:6379/0
+      MAX_BATCH_SIZE: 8
+      MAX_WAIT_MS: 200
+      MAX_INPUT_CHARACTERS: 2000
+      MAX_BATCH_ITEMS: 32
+      TRANSLATION_TIMEOUT_SECONDS: 30
+      MAX_RETRIES: 3
+      API_AUTH_ENABLED: "false"
+      API_BEARER_TOKEN: dev-secret
+      TRITON_URL: http://triton:8001
+      TRITON_MODEL_NAME: mia_translate
+      TRITON_TIMEOUT_SECONDS: 30
+      CTRANSLATE2_MODEL_PATH: ./models/mia-translate-ct2
+      CTRANSLATE2_DEVICE: cpu
+      CTRANSLATE2_COMPUTE_TYPE: int8
+      VERTEX_PROJECT_ID: ""
+      VERTEX_LOCATION: ""
+      VERTEX_ENDPOINT_ID: ""
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: mia-translate-worker
+    environment:
+      APP_NAME: mia-translate-backend
+      APP_ENV: docker
+      API_PREFIX: /api/v1
+      TRANSLATION_CLIENT: mock
+      REDIS_URL: redis://redis:6379/0
+      MAX_BATCH_SIZE: 8
+      MAX_WAIT_MS: 200
+      MAX_INPUT_CHARACTERS: 2000
+      MAX_BATCH_ITEMS: 32
+      TRANSLATION_TIMEOUT_SECONDS: 30
+      MAX_RETRIES: 3
+      API_AUTH_ENABLED: "false"
+      API_BEARER_TOKEN: dev-secret
+      TRITON_URL: http://triton:8001
+      TRITON_MODEL_NAME: mia_translate
+      TRITON_TIMEOUT_SECONDS: 30
+      CTRANSLATE2_MODEL_PATH: ./models/mia-translate-ct2
+      CTRANSLATE2_DEVICE: cpu
+      CTRANSLATE2_COMPUTE_TYPE: int8
+      VERTEX_PROJECT_ID: ""
+      VERTEX_LOCATION: ""
+      VERTEX_ENDPOINT_ID: ""
+    depends_on:
+      redis:
+        condition: service_healthy
 
 volumes:
   redis_data:
