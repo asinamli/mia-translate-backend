@@ -13,6 +13,9 @@ from app.schemas.translation import TranslationStatus
 from app.services.language_service import get_language_tag
 from app.workers.batcher import JobBatcher
 
+from app.core.logging import configure_logging, get_logger
+
+logger = get_logger("app.workers.translation_worker")
 
 class TranslationWorker:
     def __init__(
@@ -48,6 +51,15 @@ class TranslationWorker:
 
     def process_next_batch(self) -> int:
         job_ids = self.batcher.collect_job_ids()
+
+        if job_ids:
+            logger.info(
+                "Worker batch collected",
+                extra={
+                    "batch_size": len(job_ids),
+                },
+            )
+
         return self._process_job_ids(job_ids)
 
     def _process_job_ids(self, job_ids: list[str]) -> int:
@@ -100,6 +112,14 @@ class TranslationWorker:
                         error=None,
                     )
 
+                    logger.info(
+                        "Job completed",
+                        extra={
+                            "job_id": job.job_id,
+                            "status": TranslationStatus.completed.value,
+                        },
+                    )
+
                     processed_count += 1
 
             except AppException as exc:
@@ -124,6 +144,16 @@ class TranslationWorker:
             )
 
             self.translation_queue.enqueue(job.job_id)
+
+            logger.warning(
+                "Job requeued after failure",
+                extra={
+                    "job_id": job.job_id,
+                    "status": TranslationStatus.queued.value,
+                    "retry_count": next_retry_count,
+                },
+            )
+
             return
 
         self.job_store.update_job(
@@ -131,6 +161,14 @@ class TranslationWorker:
             status=TranslationStatus.failed,
             error=error_message,
             retry_count=job.retry_count,
+        )
+        logger.error(
+            "Job failed permanently",
+            extra={
+                "job_id": job.job_id,
+                "status": TranslationStatus.failed.value,
+                "retry_count": job.retry_count,
+            },
         )
 
     def run_forever(self, poll_interval_seconds: float = 1.0) -> None:
@@ -142,6 +180,8 @@ class TranslationWorker:
 
 
 def main() -> None:
+    configure_logging()
+
     parser = argparse.ArgumentParser(description="Mia Translate background worker")
     parser.add_argument(
         "--once",
