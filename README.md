@@ -2,9 +2,9 @@
 
 Mia Translate Backend, Mektup uygulamasında kullanılacak çeviri altyapısı için geliştirilen FastAPI tabanlı backend servisidir.
 
-Bu proje, `mektup-mia/Mia-Translate` modelinin production’a yakın bir backend mimarisiyle kullanılabilmesi için hazırlanmıştır. Amaç yalnızca bir model çağıran API yazmak değil; çeviri isteklerini doğrulayan, sıraya alan, arka planda worker ile işleyen, batchleme ve retry mekanizmalarıyla desteklenen, Docker ile çalıştırılabilen ve farklı model servisleme seçeneklerine hazır bir servis mimarisi kurmaktır.
+Bu proje yalnızca bir model çağıran basit API yapısı değildir. Çeviri isteklerini doğrulayan, sync/async çalışabilen, Redis queue üzerinden job yönetimi yapan, worker ile arka planda işleyen, batchleme ve retry mekanizmaları içeren, Docker ile ayağa kaldırılabilen ve farklı model servisleme seçeneklerine hazır bir backend mimarisi olarak tasarlanmıştır.
 
-Mevcut MVP sürümünde backend akışı local geliştirme ve test için `MockTranslationClient` ile çalışmaktadır. Model çağırma katmanı soyutlandığı için NVIDIA Triton, CTranslate2 veya Google Cloud Vertex AI entegrasyonları mevcut API, Redis queue ve worker mimarisi bozulmadan eklenebilir.
+Backend varsayılan olarak `MockTranslationClient` ile hızlı şekilde test edilebilir. Bunun yanında CTranslate2 tabanlı MADLAD/Mia model inference akışı local ortamda doğrulanmıştır. Model çağırma katmanı soyutlandığı için CTranslate2, NVIDIA Triton veya Google Cloud Vertex AI seçenekleri mevcut API, Redis queue ve worker mimarisi bozulmadan kullanılabilir.
 
 ---
 
@@ -13,7 +13,9 @@ Mevcut MVP sürümünde backend akışı local geliştirme ve test için `MockTr
 - [Proje Amacı](#proje-amacı)
 - [Genel Mimari](#genel-mimari)
 - [Temel Özellikler](#temel-özellikler)
+- [Kullanılan Model Yaklaşımı](#kullanılan-model-yaklaşımı)
 - [Model Servisleme Yaklaşımı](#model-servisleme-yaklaşımı)
+- [CTranslate2 Local Inference](#ctranslate2-local-inference)
 - [Klasör Yapısı](#klasör-yapısı)
 - [API Endpointleri](#api-endpointleri)
 - [Async Job ve Worker Akışı](#async-job-ve-worker-akışı)
@@ -23,7 +25,7 @@ Mevcut MVP sürümünde backend akışı local geliştirme ve test için `MockTr
 - [Local Geliştirme](#local-geliştirme)
 - [Testler](#testler)
 - [Environment Değişkenleri](#environment-değişkenleri)
-- [Mevcut MVP Kapsamı](#mevcut-mvp-kapsamı)
+- [Mevcut Kapsam](#mevcut-kapsam)
 - [Geliştirme Yol Haritası](#geliştirme-yol-haritası)
 
 ---
@@ -41,7 +43,7 @@ Bu projede odaklanılan temel ihtiyaçlar:
 - Worker ile arka planda job işlemek
 - Worker tarafında micro-batching uygulamak
 - Geçici hata durumlarında retry mekanizması kullanmak
-- Model çağırma katmanını Mock, Triton, CTranslate2 ve Vertex AI seçeneklerine hazır hale getirmek
+- Model çağırma katmanını farklı inference seçeneklerine hazır hale getirmek
 - Docker ile API, Worker ve Redis servislerini birlikte çalıştırabilmek
 
 ---
@@ -85,7 +87,7 @@ Translation Client             Redis Job Store
         +--------------------- Translation Client
                                       |
                                       v
-                     Mock / Triton / CTranslate2 / Vertex AI
+                     Mock / CTranslate2 / Triton / Vertex AI
 ```
 
 Bu mimaride API katmanı, iş mantığı, Redis job store, Redis queue, worker ve model client katmanları birbirinden ayrılmıştır. Böylece model servisleme yöntemi değişse bile API ve worker akışı büyük ölçüde korunur.
@@ -104,26 +106,34 @@ Bu mimaride API katmanı, iş mantığı, Redis job store, Redis queue, worker v
 - Worker ile arka planda işleme
 - Worker-side batch processing
 - Retry / failed job yönetimi
-- MockTranslationClient ile local test edilebilir yapı
-- Triton, CTranslate2 ve Vertex AI client iskeletleri
+- Structured JSON logging
+- MockTranslationClient ile hızlı local test
+- CTranslate2TranslationClient ile gerçek model inference
+- Triton ve Vertex AI için genişletilebilir client iskeletleri
 - Docker Compose ile API + Worker + Redis çalıştırma
 - Pytest test altyapısı
 
 ---
 
-## Kullanılan Model
+## Kullanılan Model Yaklaşımı
 
-Planlanan model:
+Proje, Mia-Translate/MADLAD tabanlı makine çevirisi kullanımına göre hazırlanmıştır.
 
-- Hugging Face repo: `mektup-mia/Mia-Translate`
-- Temel model: `google/madlad400-3b-mt`
+Model tarafındaki temel yaklaşım:
+
+- Mektup tarafındaki hedef model: `mektup-mia/Mia-Translate`
+- Temel model referansı: `google/madlad400-3b-mt`
 - Model tipi: makine çevirisi
 - Mimari: T5 encoder-decoder
-- Yaklaşık parametre sayısı: 3B
-- Hedef dil formatı: `<2tr>`, `<2en>`, `<2ar>` gibi dil tag’leri
-- Giriş limiti: yaklaşık 512 token
+- Hedef dil formatı: `<2tr>`, `<2en>`, `<2de>` gibi dil tag’leri
 
-Bu backend mimarisi Mia-Translate modelini farklı servisleme seçenekleriyle kullanabilecek şekilde hazırlanmıştır. Mevcut local geliştirme akışında gerçek model inference yerine `MockTranslationClient` kullanılmaktadır.
+Local gerçek inference testlerinde hazır CTranslate2 int8 MADLAD artifact kullanılmıştır:
+
+```text
+Heng666/madlad400-3b-mt-ct2-int8
+```
+
+Production/app entegrasyonu için önerilen yöntem, resmi `google/madlad400-3b-mt` modelinden kontrollü bir CTranslate2 artifact üretmek ve bu artifact’i Docker volume veya model registry üzerinden backend’e bağlamaktır.
 
 ---
 
@@ -131,14 +141,12 @@ Bu backend mimarisi Mia-Translate modelini farklı servisleme seçenekleriyle ku
 
 Projede model çağırma katmanı `TranslationClient` arayüzü üzerinden soyutlanmıştır.
 
-Bu sayede servis ve worker doğrudan belirli bir model servisleme yöntemine bağımlı değildir.
-
 Desteklenen client seçenekleri:
 
 ```text
 mock
-triton
 ctranslate2
+triton
 vertex
 ```
 
@@ -150,7 +158,7 @@ TRANSLATION_CLIENT=mock
 
 ### MockTranslationClient
 
-Local geliştirme ve test ortamında kullanılır. Gerçek çeviri yapmaz, ancak backend akışının çalıştığını doğrulamak için mock cevap döndürür.
+Backend akışını model dosyası gerektirmeden hızlı test etmek için kullanılır.
 
 Örnek çıktı:
 
@@ -158,23 +166,76 @@ Local geliştirme ve test ortamında kullanılır. Gerçek çeviri yapmaz, ancak
 [mock-<2en>] Merhaba
 ```
 
-### TritonTranslationClient
-
-NVIDIA Triton Inference Server entegrasyonu için hazırlanmış client iskeletidir.
-
-Bu client, Triton model repository yapısı ve model input/output şeması netleştirildiğinde gerçek inference çağrısı yapacak şekilde genişletilebilir.
+Pytest testleri varsayılan olarak mock client ile çalışır. Böylece testler hızlı ve deterministik kalır.
 
 ### CTranslate2TranslationClient
 
-Mia-Translate modelinin CTranslate2 formatına dönüştürülmüş versiyonunu kullanmak için hazırlanmıştır.
+CTranslate2 tabanlı gerçek model inference için kullanılır.
 
-CTranslate2, model inference performansını artırmak için değerlendirilecek bir seçenektir. Bu client aktif edilmeden önce modelin CTranslate2 formatına dönüştürülmesi gerekir.
+Bu client, CTranslate2 formatındaki model artifact’i üzerinden gerçek çeviri üretir.
+
+Local testlerde aşağıdaki artifact kullanılmıştır:
+
+```text
+Heng666/madlad400-3b-mt-ct2-int8
+```
+
+Bu akışla script, Swagger sync translate, Swagger batch translate ve Redis queue + worker async translate testleri başarıyla yapılmıştır.
+
+### TritonTranslationClient
+
+NVIDIA Triton Inference Server entegrasyonu için hazırlanmış client yapısıdır.
+
+Bu client, modelin ayrı bir inference server olarak servis edildiği senaryoda kullanılmak üzere tasarlanmıştır.
 
 ### VertexAITranslationClient
 
-Google Cloud Vertex AI endpoint entegrasyonu için hazırlanmıştır.
+Google Cloud Vertex AI endpoint entegrasyonu için hazırlanmış client yapısıdır.
 
-Vertex AI project, location, endpoint ve credential bilgileri sağlandığında aynı `TranslationClient` arayüzü üzerinden gerçek endpoint çağrısı eklenebilir.
+Vertex AI project, location, endpoint ve credential bilgileri sağlandığında aynı `TranslationClient` arayüzü üzerinden gerçek endpoint çağrısı yapılabilecek şekilde genişletilebilir.
+
+---
+
+## CTranslate2 Local Inference
+
+CTranslate2 tabanlı gerçek model inference local ortamda test edilebilir.
+
+ML bağımlılıkları ana backend bağımlılıklarından ayrı tutulur:
+
+```bash
+pip install -r requirements-ml.txt
+```
+
+CTranslate2 ortam kontrolü:
+
+```powershell
+python scripts/check_ctranslate2.py
+```
+
+Hazır CT2 int8 MADLAD artifact ile smoke test:
+
+```powershell
+python scripts/ct2_madlad_smoke_test.py --text "Merhaba, nasılsın?" --target-lang en --device cpu --compute-type int8
+```
+
+Örnek çıktı:
+
+```text
+Hi, how are you?
+```
+
+Backend üzerinden gerçek model kullanmak için `.env` içinde:
+
+```env
+TRANSLATION_CLIENT=ctranslate2
+CTRANSLATE2_MODEL_PATH=./models/madlad400-3b-mt-ct2-int8
+CTRANSLATE2_DEVICE=cpu
+CTRANSLATE2_COMPUTE_TYPE=int8
+```
+
+kullanılır.
+
+Bu ayarla Swagger üzerinden sync, batch ve async job akışları gerçek model inference ile test edilebilir.
 
 ---
 
@@ -193,14 +254,15 @@ app/
   clients/
     base.py
     mock_client.py
-    triton_client.py
     ctranslate2_client.py
+    triton_client.py
     vertex_ai_client.py
     factory.py
 
   core/
     config.py
     exceptions.py
+    logging.py
 
   models/
     translation_job.py
@@ -231,40 +293,21 @@ docker/
   Dockerfile.api
   Dockerfile.worker
 
+docs/
+  model-serving.md
+
+scripts/
+  check_ctranslate2.py
+  check_hardware.py
+  ct2_madlad_smoke_test.py
+  inspect_mia_model.py
+
 tests/
 docker-compose.yml
 requirements.txt
+requirements-ml.txt
 README.md
 ```
-
-### Önemli Klasörler
-
-`app/api/`  
-FastAPI endpointlerinin bulunduğu katmandır.
-
-`app/clients/`  
-Model servisleme clientlarının bulunduğu katmandır. Mock, Triton, CTranslate2 ve Vertex AI seçenekleri burada konumlanır.
-
-`app/core/`  
-Config ve özel hata sınıfları gibi çekirdek yapıların bulunduğu bölümdür.
-
-`app/models/`  
-İç veri modellerinin bulunduğu katmandır. Redis’te saklanan translation job modeli burada tanımlanır.
-
-`app/queue/`  
-Redis bağlantısı, Redis job store ve Redis queue yapıları burada bulunur.
-
-`app/schemas/`  
-API request/response modelleri burada tanımlanır.
-
-`app/services/`  
-İş mantığının bulunduğu katmandır. Translation, validation, language ve job servisleri burada yer alır.
-
-`app/workers/`  
-Redis queue’dan job alan ve arka planda çeviri işleyen worker yapısı burada bulunur.
-
-`tests/`  
-Pytest testlerinin bulunduğu klasördür.
 
 ---
 
@@ -287,8 +330,6 @@ Servisin ayakta olup olmadığını kontrol eder.
 }
 ```
 
----
-
 ### Readiness Check
 
 ```http
@@ -297,20 +338,13 @@ GET /ready
 
 Servisin iş kabul etmeye hazır olup olmadığını kontrol eder.
 
-Kontrol edilen başlıklar:
-
-- Config okunabiliyor mu?
-- Aktif translation client nedir?
-- Redis bağlantısı çalışıyor mu?
-- Vertex config değerleri tanımlı mı?
-
 Örnek response:
 
 ```json
 {
   "status": "ready",
   "service": "mia-translate-backend",
-  "environment": "docker",
+  "environment": "local",
   "checks": {
     "config": "ok",
     "translation_client": "mock",
@@ -321,8 +355,6 @@ Kontrol edilen başlıklar:
 }
 ```
 
----
-
 ### Tekil Çeviri
 
 ```http
@@ -331,18 +363,18 @@ POST /api/v1/translate
 
 Sync veya async modda tekil çeviri isteği alır.
 
-#### Sync Request
+Sync request:
 
 ```json
 {
-  "text": "Merhaba",
+  "text": "Merhaba, nasılsın?",
   "source_lang": "tr",
   "target_lang": "en",
   "mode": "sync"
 }
 ```
 
-#### Sync Response
+Mock response örneği:
 
 ```json
 {
@@ -351,23 +383,37 @@ Sync veya async modda tekil çeviri isteği alır.
   "status": "completed",
   "source_lang": "tr",
   "target_lang": "en",
-  "translated_text": "[mock-<2en>] Merhaba",
+  "translated_text": "[mock-<2en>] Merhaba, nasılsın?",
   "job_id": null
 }
 ```
 
-#### Async Request
+CTranslate2 response örneği:
 
 ```json
 {
-  "text": "Merhaba",
+  "request_id": "req_...",
+  "mode": "sync",
+  "status": "completed",
+  "source_lang": "tr",
+  "target_lang": "en",
+  "translated_text": "Hi, how are you?",
+  "job_id": null
+}
+```
+
+Async request:
+
+```json
+{
+  "text": "Merhaba, nasılsın?",
   "source_lang": "tr",
   "target_lang": "en",
   "mode": "async"
 }
 ```
 
-#### Async Response
+Async response:
 
 ```json
 {
@@ -380,8 +426,6 @@ Sync veya async modda tekil çeviri isteği alır.
   "job_id": "job_..."
 }
 ```
-
----
 
 ### Batch Çeviri
 
@@ -397,52 +441,19 @@ Birden fazla metni tek request içinde alır.
 {
   "items": [
     {
-      "text": "Merhaba",
+      "text": "Merhaba, nasılsın?",
       "source_lang": "tr",
       "target_lang": "en"
     },
     {
-      "text": "Nasılsın?",
+      "text": "Bugün backend projesi üzerinde çalışıyorum.",
       "source_lang": "tr",
-      "target_lang": "en"
+      "target_lang": "de"
     }
   ],
   "mode": "sync"
 }
 ```
-
-Örnek response:
-
-```json
-{
-  "request_id": "req_...",
-  "mode": "sync",
-  "status": "completed",
-  "items": [
-    {
-      "item_index": 0,
-      "status": "completed",
-      "source_lang": "tr",
-      "target_lang": "en",
-      "translated_text": "[mock-<2en>] Merhaba",
-      "job_id": null,
-      "error": null
-    },
-    {
-      "item_index": 1,
-      "status": "completed",
-      "source_lang": "tr",
-      "target_lang": "en",
-      "translated_text": "[mock-<2en>] Nasılsın?",
-      "job_id": null,
-      "error": null
-    }
-  ],
-  "job_ids": []
-}
-```
-
----
 
 ### Job Durumu Sorgulama
 
@@ -469,7 +480,7 @@ failed
   "status": "completed",
   "source_lang": "tr",
   "target_lang": "en",
-  "translated_text": "[mock-<2en>] Merhaba",
+  "translated_text": "Hi, how are you?",
   "error": null,
   "retry_count": 0
 }
@@ -498,13 +509,11 @@ Akış:
 12. Kullanıcı GET /jobs/{job_id} ile sonucu alır
 ```
 
-Bu yapı uzun sürebilecek çeviri işlemlerinin API request süresini bloklamadan arka planda yürütülmesini sağlar.
-
 ---
 
 ## Worker Batchleme
 
-Worker tek tek job işlemek yerine kısa süreli bir batch toplama penceresi kullanır.
+Worker kısa süreli bir bekleme penceresi içinde queue’dan birden fazla job toplayabilir.
 
 Ayarlar:
 
@@ -522,13 +531,11 @@ Processed: 3
 Queue length: 0
 ```
 
-Bu yapı özellikle çok sayıda istek geldiğinde model çağrılarını daha kontrollü ve verimli hale getirmek için hazırlanmıştır.
-
 ---
 
 ## Retry ve Failed Job Yönetimi
 
-Worker job işlerken hata alırsa job hemen kaybolmaz.
+Worker job işlerken hata alırsa retry mekanizması devreye girer.
 
 Akış:
 
@@ -551,15 +558,11 @@ Retry ayarı:
 MAX_RETRIES=3
 ```
 
-Bu yapı geçici model veya network hatalarında job’ın tekrar denenmesini sağlar.
-
 ---
 
 ## Docker ile Çalıştırma
 
-Proje Docker Compose ile API, Worker ve Redis servislerini birlikte ayağa kaldırabilir.
-
-### Build ve Çalıştırma
+API, worker ve Redis servislerini birlikte ayağa kaldırmak için:
 
 ```bash
 docker compose up --build
@@ -571,7 +574,7 @@ Arka planda çalıştırmak için:
 docker compose up --build -d
 ```
 
-Servisleri kontrol etmek için:
+Container kontrolü:
 
 ```bash
 docker ps
@@ -585,19 +588,19 @@ mia-translate-worker
 mia-translate-redis
 ```
 
-### API
+Swagger UI:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### Ready Check
+Ready check:
 
 ```text
 http://127.0.0.1:8000/ready
 ```
 
-### Redis Queue Kontrolü
+Redis queue kontrolü:
 
 ```bash
 docker exec mia-translate-redis redis-cli LLEN translation_jobs:queue
@@ -619,13 +622,19 @@ Windows PowerShell için aktif etme:
 .\venv\Scripts\Activate.ps1
 ```
 
-Bağımlılıkları yükleme:
+Backend bağımlılıkları:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Redis’i Docker ile çalıştırma:
+ML bağımlılıkları:
+
+```bash
+pip install -r requirements-ml.txt
+```
+
+Redis çalıştırma:
 
 ```bash
 docker compose up -d redis
@@ -637,22 +646,16 @@ API çalıştırma:
 uvicorn app.main:app --reload
 ```
 
-Worker’ı tek batch için çalıştırma:
+Worker tek batch:
 
 ```bash
 python -m app.workers.translation_worker --once
 ```
 
-Worker’ı sürekli çalıştırma:
+Worker sürekli çalışma:
 
 ```bash
 python -m app.workers.translation_worker
-```
-
-Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
 ```
 
 ---
@@ -664,6 +667,8 @@ Testleri çalıştırmak için:
 ```bash
 pytest
 ```
+
+Pytest testleri varsayılan olarak `MockTranslationClient` ile çalışır.
 
 Test edilen başlıklar:
 
@@ -680,9 +685,10 @@ Test edilen başlıklar:
 - Worker batch processing
 - Retry / failed handling
 - Client factory
-- Mock / Triton / CTranslate2 / Vertex client seçimi
+- Structured logging
+- Mock / CTranslate2 / Triton / Vertex client seçimi
 
-Son doğrulamada tüm testler başarılı geçmiştir.
+Gerçek model testleri manual/integration test olarak CTranslate2 client ile ayrıca yapılır.
 
 ---
 
@@ -713,7 +719,7 @@ TRITON_URL=http://localhost:8001
 TRITON_MODEL_NAME=mia_translate
 TRITON_TIMEOUT_SECONDS=30
 
-CTRANSLATE2_MODEL_PATH=./models/mia-translate-ct2
+CTRANSLATE2_MODEL_PATH=./models/madlad400-3b-mt-ct2-int8
 CTRANSLATE2_DEVICE=cpu
 CTRANSLATE2_COMPUTE_TYPE=int8
 
@@ -722,13 +728,13 @@ VERTEX_LOCATION=
 VERTEX_ENDPOINT_ID=
 ```
 
-Docker Compose içinde API ve Worker servisleri Redis’e şu adresle bağlanır:
+Docker Compose içinde API ve Worker Redis’e şu adresle bağlanır:
 
 ```env
 REDIS_URL=redis://redis:6379/0
 ```
 
-Local geliştirmede ise host üzerinden:
+Local geliştirmede host üzerinden:
 
 ```env
 REDIS_URL=redis://localhost:6380/0
@@ -736,9 +742,7 @@ REDIS_URL=redis://localhost:6380/0
 
 ---
 
-## Mevcut MVP Kapsamı
-
-Bu MVP sürümünde çeviri backend’inin ana servis mimarisi hazırlanmıştır.
+## Mevcut Kapsam
 
 Hazır olan ana parçalar:
 
@@ -754,12 +758,25 @@ Hazır olan ana parçalar:
 - Worker
 - Worker-side batch processing
 - Retry / failed job handling
+- Structured logging
 - Client factory
-- Mock, Triton, CTranslate2 ve Vertex AI client iskeletleri
+- Mock client
+- Gerçek CTranslate2 inference client
+- Triton ve Vertex AI client yapıları
 - Docker ile API + Worker + Redis çalıştırma
 - Pytest test altyapısı
-
-Bu sürümde local geliştirme ve backend akış testleri için `MockTranslationClient` aktif kullanılmaktadır. Triton, CTranslate2 ve Vertex AI client yapıları mimariye eklenmiş ve gerçek model servisleme ortamı netleştiğinde aktif edilebilecek şekilde hazırlanmıştır.
+- CTranslate2/MADLAD local smoke test scriptleri
 
 ---
 
+## Geliştirme Yol Haritası
+
+Sıradaki teknik adımlar:
+
+1. Resmi `google/madlad400-3b-mt` modelinden kontrollü CTranslate2 artifact üretim sürecinin hazırlanması
+2. CTranslate2 artifact’in Docker volume veya model registry üzerinden backend’e bağlanması
+3. Triton model repository ve input/output şemasının netleştirilmesi
+4. Vertex AI deployment notlarının hazırlanması
+5. Bearer token auth middleware’in eklenmesi
+6. CORS ve frontend/app entegrasyonu için gerekli API ayarlarının hazırlanması
+7. CI/CD test pipeline kurulumu
