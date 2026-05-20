@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      args:
+        INSTALL_ML_DEPS: "true"
+    environment:
+      TRANSLATION_CLIENT: ctranslate2
+      CTRANSLATE2_MODEL_PATH: /models/madlad400-3b-mt-ct2-int8
+      CTRANSLATE2_DEVICE: cpu
+      CTRANSLATE2_COMPUTE_TYPE: int8
+    volumes:
+      - ./models:/models:ro
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      args:
+        INSTALL_ML_DEPS: "true"
+    environment:
+      TRANSLATION_CLIENT: ctranslate2
+      CTRANSLATE2_MODEL_PATH: /models/madlad400-3b-mt-ct2-int8
+      CTRANSLATE2_DEVICE: cpu
+      CTRANSLATE2_COMPUTE_TYPE: int8
+    volumes:
+      - ./models:/models:ro
