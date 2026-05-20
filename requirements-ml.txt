@@ -1,0 +1,9 @@
+﻿# Optional ML dependencies for local Mia-Translate / CTranslate2 experiments.
+# These packages are not required for the default backend flow.
+# Default backend still works with MockTranslationClient.
+
+ctranslate2
+transformers
+sentencepiece
+torch
+huggingface-hub
