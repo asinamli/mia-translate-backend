@@ -270,6 +270,25 @@ Bu ayarla Swagger üzerinden sync, batch ve async job akışları gerçek model 
 
 ---
 
+### Kontrollü CTranslate2 artifact üretimi
+
+Local smoke test için hazır CT2 int8 artifact kullanılmıştır. Production/app entegrasyonu için önerilen yöntem, resmi `google/madlad400-3b-mt` modelinden kontrollü CTranslate2 artifact üretmektir.
+
+Conversion süreci için:
+
+```text
+docs/ctranslate2-conversion.md
+```
+
+Conversion script’i:
+
+```powershell
+python scripts/convert_madlad_to_ct2.py `
+  --model google/madlad400-3b-mt `
+  --output-dir models/madlad400-3b-mt-ct2-int8-official `
+  --quantization int8
+```
+
 ## Klasör Yapısı
 
 ```text
@@ -326,12 +345,20 @@ docker/
 
 docs/
   model-serving.md
+  vertex-ai.md
+  ctranslate2-conversion.md
 
 scripts/
   check_ctranslate2.py
   check_hardware.py
   ct2_madlad_smoke_test.py
+  convert_madlad_to_ct2.py
+  download_ct2_model.py
   inspect_mia_model.py
+
+docker-compose.ctranslate2.yml
+requirements-cloud.txt
+requirements-ml-runtime.txt
 
 tests/
 docker-compose.yml
@@ -723,7 +750,6 @@ Gerçek model testleri manual/integration test olarak CTranslate2 client ile ayr
 
 ---
 
----
 
 ## Security ve CORS
 
@@ -788,6 +814,7 @@ MAX_RETRIES=3
 
 API_AUTH_ENABLED=false
 API_BEARER_TOKEN=dev-secret
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
 TRITON_URL=http://localhost:8001
 TRITON_MODEL_NAME=mia_translate
@@ -846,9 +873,7 @@ Hazır olan ana parçalar:
 
 ---
 
-## Geliştirme Yol Haritası
 
-Sıradaki teknik adımlar:
 
 ## Geliştirme Yol Haritası
 
