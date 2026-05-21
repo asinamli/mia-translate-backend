@@ -24,6 +24,7 @@ Backend varsayılan olarak `MockTranslationClient` ile hızlı şekilde test edi
 - [Docker ile Çalıştırma](#docker-ile-çalıştırma)
 - [Local Geliştirme](#local-geliştirme)
 - [Testler](#testler)
+- [Security ve CORS](#security-ve-cors)
 - [Environment Değişkenleri](#environment-değişkenleri)
 - [Mevcut Kapsam](#mevcut-kapsam)
 - [Geliştirme Yol Haritası](#geliştirme-yol-haritası)
@@ -192,9 +193,39 @@ Bu client, modelin ayrı bir inference server olarak servis edildiği senaryoda 
 
 Google Cloud Vertex AI endpoint entegrasyonu için hazırlanmış client yapısıdır.
 
-Vertex AI project, location, endpoint ve credential bilgileri sağlandığında aynı `TranslationClient` arayüzü üzerinden gerçek endpoint çağrısı yapılabilecek şekilde genişletilebilir.
+`TRANSLATION_CLIENT=vertex` seçildiğinde backend, `.env` üzerinden tanımlanan Vertex AI endpoint’e prediction isteği gönderecek şekilde çalışır.
 
----
+Gerekli değerler:
+
+```env
+TRANSLATION_CLIENT=vertex
+VERTEX_PROJECT_ID=your-project-id
+VERTEX_LOCATION=us-central1
+VERTEX_ENDPOINT_ID=your-endpoint-id
+```
+
+Ek bağımlılık:
+
+```bash
+pip install -r requirements-cloud.txt
+```
+
+Vertex tarafındaki endpoint’in şu input alanlarını kabul etmesi beklenir:
+
+```json
+{
+  "text": "Merhaba",
+  "source_lang": "tr",
+  "target_lang": "en",
+  "target_tag": "<2en>"
+}
+```
+
+Detaylı test adımları:
+
+```text
+docs/vertex-ai.md
+```
 
 ## CTranslate2 Local Inference
 
@@ -692,7 +723,8 @@ Gerçek model testleri manual/integration test olarak CTranslate2 client ile ayr
 
 ---
 
-- [Security ve CORS](#security-ve-cors)
+---
+
 ## Security ve CORS
 
 API endpointleri isteğe bağlı Bearer token auth ile korunabilir.
@@ -702,7 +734,37 @@ Auth `.env` üzerinden açılıp kapatılır:
 ```env
 API_AUTH_ENABLED=false
 API_BEARER_TOKEN=dev-secret
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
 
+Auth aktif edildiğinde `/api/v1/...` altındaki endpointler için şu header beklenir:
+
+```text
+Authorization: Bearer dev-secret
+```
+
+Korunan endpointler:
+
+```text
+POST /api/v1/translate
+POST /api/v1/translate/batch
+GET  /api/v1/jobs/{job_id}
+```
+
+Aşağıdaki endpointler açık kalır:
+
+```text
+GET /health
+GET /ready
+GET /docs
+GET /openapi.json
+```
+
+Frontend veya app entegrasyonu için CORS originleri config üzerinden tanımlanır:
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
 
 ## Environment Değişkenleri
 
@@ -774,7 +836,8 @@ Hazır olan ana parçalar:
 - Client factory
 - Mock client
 - Gerçek CTranslate2 inference client
-- Triton ve Vertex AI client yapıları
+- Triton client yapısı
+- Vertex AI endpoint-ready client yapısı
 - Docker ile API + Worker + Redis çalıştırma
 - Pytest test altyapısı
 - CTranslate2/MADLAD local smoke test scriptleri
@@ -787,8 +850,12 @@ Hazır olan ana parçalar:
 
 Sıradaki teknik adımlar:
 
+## Geliştirme Yol Haritası
+
+Sıradaki teknik adımlar:
+
 1. Resmi `google/madlad400-3b-mt` modelinden kontrollü CTranslate2 artifact üretim sürecinin hazırlanması
 2. Triton model repository ve input/output şemasının netleştirilmesi
-3. Vertex AI deployment notlarının hazırlanması
+3. Yönetici Google Cloud ortamında Vertex AI endpoint gerçek testinin yapılması
 4. CI/CD test pipeline kurulumu
 5. Frontend/app entegrasyonu için örnek client akışının hazırlanması
