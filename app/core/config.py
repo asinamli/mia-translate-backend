@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     api_auth_enabled: bool = False
     api_bearer_token: str = "dev-secret"
 
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+    ]
+
     vertex_project_id: str = ""
     vertex_location: str = ""
     vertex_endpoint_id: str = ""
