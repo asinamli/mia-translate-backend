@@ -75,6 +75,8 @@ python scripts/convert_madlad_to_ct2.py `
 
 Conversion başarılı olursa output klasöründe CTranslate2 model dosyaları oluşur.
 
+Script, backend’in tokenizer olarak ihtiyaç duyduğu `spiece.model` dosyasını da output klasörüne kopyalayacak şekilde hazırlanmıştır.
+
 Beklenen klasör örneği:
 
 ```text
@@ -85,6 +87,17 @@ models/
     shared_vocabulary.json
     spiece.model
 ```
+
+---
+
+## Yönetici için hızlı çalıştırma
+
+Yönetici veya güçlü bir makinede resmi modelden CTranslate2 artifact üretmek için aşağıdaki adımlar izlenir.
+
+Önce bağımlılıklar kurulur:
+
+```powershell
+pip install -r requirements-ml.txt
 
 ---
 

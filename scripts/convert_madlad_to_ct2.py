@@ -13,14 +13,16 @@ def run_conversion(model: str, output_dir: str, quantization: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     command = [
-        "ct2-transformers-converter",
-        "--model",
-        model,
-        "--output_dir",
-        str(output_path),
-        "--quantization",
-        quantization,
-    ]
+    "ct2-transformers-converter",
+    "--model",
+    model,
+    "--output_dir",
+    str(output_path),
+    "--quantization",
+    quantization,
+    "--copy_files",
+    "spiece.model",
+]
 
     print("CTranslate2 conversion başlatılıyor...")
     print(f"Model: {model}")
