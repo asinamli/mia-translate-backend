@@ -879,8 +879,8 @@ Hazır olan ana parçalar:
 
 Sıradaki teknik adımlar:
 
-1. Resmi `google/madlad400-3b-mt` modelinden kontrollü CTranslate2 artifact üretim sürecinin hazırlanması
-2. Triton model repository ve input/output şemasının netleştirilmesi
-3. Yönetici Google Cloud ortamında Vertex AI endpoint gerçek testinin yapılması
+1. Triton model repository ve input/output şemasının netleştirilmesi
+2. Yönetici Google Cloud ortamında Vertex AI endpoint gerçek testinin yapılması
+3. Resmi modelden üretilen CTranslate2 artifact’in güçlü makinede çalıştırılıp doğrulanması
 4. CI/CD test pipeline kurulumu
 5. Frontend/app entegrasyonu için örnek client akışının hazırlanması
