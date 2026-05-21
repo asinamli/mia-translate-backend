@@ -1,1 +1,1 @@
-requirements-cloud.txt
+google-cloud-aiplatform
