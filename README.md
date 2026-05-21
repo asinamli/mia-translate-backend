@@ -692,6 +692,18 @@ Gerçek model testleri manual/integration test olarak CTranslate2 client ile ayr
 
 ---
 
+- [Security ve CORS](#security-ve-cors)
+## Security ve CORS
+
+API endpointleri isteğe bağlı Bearer token auth ile korunabilir.
+
+Auth `.env` üzerinden açılıp kapatılır:
+
+```env
+API_AUTH_ENABLED=false
+API_BEARER_TOKEN=dev-secret
+
+
 ## Environment Değişkenleri
 
 Örnek `.env`:
@@ -766,6 +778,8 @@ Hazır olan ana parçalar:
 - Docker ile API + Worker + Redis çalıştırma
 - Pytest test altyapısı
 - CTranslate2/MADLAD local smoke test scriptleri
+- Bearer token auth middleware
+- CORS config desteği
 
 ---
 
@@ -774,9 +788,7 @@ Hazır olan ana parçalar:
 Sıradaki teknik adımlar:
 
 1. Resmi `google/madlad400-3b-mt` modelinden kontrollü CTranslate2 artifact üretim sürecinin hazırlanması
-2. CTranslate2 artifact’in Docker volume veya model registry üzerinden backend’e bağlanması
-3. Triton model repository ve input/output şemasının netleştirilmesi
-4. Vertex AI deployment notlarının hazırlanması
-5. Bearer token auth middleware’in eklenmesi
-6. CORS ve frontend/app entegrasyonu için gerekli API ayarlarının hazırlanması
-7. CI/CD test pipeline kurulumu
+2. Triton model repository ve input/output şemasının netleştirilmesi
+3. Vertex AI deployment notlarının hazırlanması
+4. CI/CD test pipeline kurulumu
+5. Frontend/app entegrasyonu için örnek client akışının hazırlanması
