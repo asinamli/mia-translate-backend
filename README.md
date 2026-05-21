@@ -187,7 +187,37 @@ Bu akışla script, Swagger sync translate, Swagger batch translate ve Redis que
 
 NVIDIA Triton Inference Server entegrasyonu için hazırlanmış client yapısıdır.
 
-Bu client, modelin ayrı bir inference server olarak servis edildiği senaryoda kullanılmak üzere tasarlanmıştır.
+`TRANSLATION_CLIENT=triton` seçildiğinde backend, `.env` üzerinden tanımlanan Triton HTTP endpoint’e inference isteği gönderecek şekilde çalışır.
+
+Gerekli değerler:
+
+```env
+TRANSLATION_CLIENT=triton
+TRITON_URL=http://localhost:8001
+TRITON_MODEL_NAME=mia_translate
+TRITON_TIMEOUT_SECONDS=30
+```
+
+Backend Triton’a şu inputları gönderir:
+
+```text
+TEXT
+SOURCE_LANG
+TARGET_LANG
+TARGET_TAG
+```
+
+Backend Triton’dan şu outputu bekler:
+
+```text
+TRANSLATED_TEXT
+```
+
+Detaylı Triton contract ve model repository taslağı için:
+
+```text
+docs/triton-readiness.md
+```
 
 ### VertexAITranslationClient
 

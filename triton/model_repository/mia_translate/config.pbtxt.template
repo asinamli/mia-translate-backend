@@ -1,0 +1,40 @@
+name: "mia_translate"
+backend: "python"
+max_batch_size: 8
+
+input [
+  {
+    name: "TEXT"
+    data_type: TYPE_STRING
+    dims: [1]
+  },
+  {
+    name: "SOURCE_LANG"
+    data_type: TYPE_STRING
+    dims: [1]
+  },
+  {
+    name: "TARGET_LANG"
+    data_type: TYPE_STRING
+    dims: [1]
+  },
+  {
+    name: "TARGET_TAG"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+output [
+  {
+    name: "TRANSLATED_TEXT"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_CPU
+  }
+]
