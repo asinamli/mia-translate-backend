@@ -40,9 +40,9 @@ class TritonTranslationClient(TranslationClient):
         instances = [
             {
                 "text": item.text,
-                "source_lang": item.source_lang,
-                "target_lang": item.target_lang,
-                "target_tag": item.target_tag,
+                "source_lang": item.source_lang or "",
+                "target_lang": item.target_lang or "",
+                "target_tag": item.target_tag or "",
             }
             for item in translation_inputs
         ]
