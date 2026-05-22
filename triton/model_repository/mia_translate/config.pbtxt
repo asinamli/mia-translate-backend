@@ -33,8 +33,42 @@ output [
   }
 ]
 
+parameters [
+  {
+    key: "MODEL_PATH"
+    value: {
+      string_value: "/models/madlad400-3b-mt-ct2-int8"
+    }
+  },
+  {
+    key: "DEVICE"
+    value: {
+      string_value: "cpu"
+    }
+  },
+  {
+    key: "COMPUTE_TYPE"
+    value: {
+      string_value: "int8"
+    }
+  },
+  {
+    key: "MAX_DECODING_LENGTH"
+    value: {
+      string_value: "128"
+    }
+  },
+  {
+    key: "BEAM_SIZE"
+    value: {
+      string_value: "1"
+    }
+  }
+]
+
 instance_group [
   {
     kind: KIND_CPU
+    count: 1
   }
 ]

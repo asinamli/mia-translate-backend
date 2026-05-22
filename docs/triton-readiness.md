@@ -6,6 +6,14 @@ Bu repoda gerçek Triton server çalıştırılmamıştır. Bu repoda Triton iç
 
 ---
 
+Bu repoda Triton için model repository taslağı ve Python backend runtime örneği hazırlanmıştır.
+
+triton/model_repository/mia_translate/1/model.py dosyası CTranslate2 tabanlı örnek Triton Python backend runtime sağlar. Bu runtime, TEXT, SOURCE_LANG, TARGET_LANG ve TARGET_TAG inputlarını alır; CTranslate2 model artifact’i üzerinden çeviri yapar ve TRANSLATED_TEXT outputunu döndürür.
+
+Gerçek Triton testi için Triton Inference Server ortamında ctranslate2 ve sentencepiece bağımlılıklarının yüklü olması, CTranslate2 model artifact’inin container içine mount edilmesi ve MODEL_PATH değerinin doğru verilmesi gerekir.
+
+Bu dosya backend contract’ının nasıl çalışacağını göstermek için hazırlanmıştır. Gerçek performans ve GPU testi güçlü makine veya cloud ortamında yapılmalıdır.
+
 ## Bu repoda hazır olanlar
 
 - `TRANSLATION_CLIENT=triton` ile Triton client seçimi
